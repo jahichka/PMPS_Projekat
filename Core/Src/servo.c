@@ -28,6 +28,7 @@ void SERVO_Off() {
 
 void SERVO_Init(){
 	HAL_TIM_Base_Start(PWM_Timer);
+	HAL_TIM_PWM_Start(PWM_Timer, TIM_CHANNEL_1);
 }
 
 void SERVO_SetAngle(int angle) {

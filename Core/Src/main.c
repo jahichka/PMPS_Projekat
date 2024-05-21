@@ -54,6 +54,7 @@ uint8_t rx_buffer[BUFSIZE + 2] = { 0 };
 uint8_t rx_input[1] = { 0 };
 uint8_t rx_index = 0;
 char msgbuf[1024];
+UART_HandleTypeDef *UART = &huart6;
 TIM_HandleTypeDef *PWM_Timer = &htim1;
 /* USER CODE END PV */
 
@@ -72,28 +73,28 @@ static void MX_SPI1_Init(void);
 
 void UART_Message(char *msg) {
 	sprintf(msgbuf, msg);
-	UART_Send();
+	HAL_UART_Transmit(UART, (uint8_t*) msgbuf, strlen(msgbuf), 100);
 }
 
 void UART_Send() {
-	HAL_UART_Transmit(&huart6, (uint8_t*) msgbuf, strlen(msgbuf), 100);
+	HAL_UART_Transmit(UART, (uint8_t*) msgbuf, strlen(msgbuf), 100);
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	if (rx_input[0] == (uint8_t) '\r' || rx_input[0] == (uint8_t) '\n') {
 		char newline[] = "\r\n";
-		HAL_UART_Transmit(&huart6, (uint8_t*) newline, strlen(newline), 100);
+		HAL_UART_Transmit(UART, (uint8_t*) newline, strlen(newline), 100);
 		memcpy(&rx_buffer[rx_index + 1], newline, sizeof newline);
 
-		HAL_UART_Transmit(&huart6, rx_buffer,
+		HAL_UART_Transmit(UART, rx_buffer,
 				sizeof(rx_buffer) / sizeof(uint8_t), 100);
 		rx_index = 0;
 		memset(rx_buffer, 0, sizeof(rx_buffer));
 	} else {
-		HAL_UART_Transmit(&huart6, rx_input, 1, 100);
+		HAL_UART_Transmit(UART, rx_input, 1, 100);
 		rx_buffer[rx_index++] = rx_input[0];
 	}
-	HAL_UART_Receive_IT(&huart6, rx_input, 1);
+	HAL_UART_Receive_IT(UART, rx_input, 1);
 }
 
 //void HAL_ADC_LevelOutOfWindowCallback(ADC_HandleTypeDef *hadc) {
