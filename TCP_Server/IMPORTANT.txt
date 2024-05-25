@@ -1,0 +1,13 @@
+NOTICE
+
+
+Things here are a wireframes/diagrams !
+They are !NOT! made to be fully functional !
+They are made to showcase the idea and possibilities
+
+If this is to be implemented propperly in the future it needs
+ - a propper database connection to store and persist data
+ - a subscriber-publisher relationship
+
+As it is currently is only for the needs of the project
+

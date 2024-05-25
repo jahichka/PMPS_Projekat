@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <script src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.4.1/semantic.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.4.1/semantic.min.js"></script>
+    <script>
+			let socket = null;
+
+			const statusColor = {
+    			UNKNOWN: 'gray',
+    			NOT_INUSE: 'green',
+    			INUSE: 'blue',
+    			BUSY: 'red',
+    			INVALID: 'purple',
+    			UNAVAILABLE: 'orange',
+    			RINGING: 'yellow',
+    			RINGINUSE: 'orange',
+    			ONHOLD: 'lightblue',
+			};
+
+            function connect(){
+    			socket = new WebSocket("ws://localhost:8000/ws");
+    			socket.onopen = (data) => {
+        			console.log("Websocket connection established")
+    			}
+    			socket.onclose = () => {
+                    console.log('Socket is closed. Reconnect will be attempted in 1 second.');
+                    setTimeout(function() {
+                      connect();
+                    }, 1000);
+    			}
+    			socket.onerror = error => {
+        			console.log(error)
+    			}
+    			socket.onmessage = msg => {
+        			let jmsg = JSON.parse(msg.data)
+        			switch (jmsg.event){
+					    case "state":
+						    let element = document.getElementById(jmsg.id)
+						    if (element){
+						        element.innerHTML = jmsg.render
+						    } else {
+						        var newRow = document.createElement("tr")
+						        newRow.innerHTML = jmsg.render
+                                newRow.setAttribute("id", jmsg.id)
+
+						        document.getElementById('devices').appendChild(newRow)
+						    }
+						    break;
+					    case "message":
+						    console.log("Recieved a message from", jmsg.id, " :", jmsg.data)
+						    var newEvent = document.createElement("div")
+						    newEvent.className = "event"
+                            newEvent.innerHTML = jmsg.render
+
+                            var feed = document.getElementById("feed")
+                            feed.insertBefore(newEvent, feed.firstChild)
+						    break;
+					    default:
+						    console.log("unknown event")
+						    break;
+				    }
+    			}
+            }
+
+			document.addEventListener("DOMContentLoaded", connect)
+
+			function createElementFromHTML(htmlString){
+			}
+
+    </script>
+    <style>
+        .ui.container {
+            text-align: center;
+            width: 600px;
+            margin-top: 40px;
+        }
+
+        .ui.grid .column {
+            background-clip: content-box;
+        }
+
+        body {
+            display: block;
+            max-width: 1200px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .ui.segment {
+            max-height: 700px;
+            overflow: scroll;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="ui two column stackable center aligned grid">
+        <div class="ui container">
+          <div class="ui secondary segment">
+            <h3>Devices</h3>
+          </div>
+          <table class="ui definition table">
+            <tbody id="devices">
+            	<tr id="101-A-101">
+            		<td> vjetroelektrana zivinice (101-A-101) </td>
+            		<td style="background-color: #ff6961;"></td>
+            	</tr>
+            	<tr>
+            		<td> Vjetroelektrana Kojsino (225-A-883) </td>
+            		<td style="background-color: #77dd77;"></td>
+            	</tr>
+            	<tr>
+            		<td> Vjetroelektrana Konjic (115-M-552) </td>
+            		<td style="background-color: #77dd77;"></td>
+            	</tr>
+            	<tr>
+            		<td> Vjetroelektrana Sarajevo (112-T-233) </td>
+            		<td style="background-color: #ff6961;"></td>
+            	</tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="ui container">
+          <div class="ui secondary segment">
+            <h3>Event History</h3>
+          </div>
+          <div class="ui scrollabe segment">
+            <div class="ui feed" id="feed">
+            </div>
+          </div>
+        </div>
+    </div>
+</body>
+
+</html>
