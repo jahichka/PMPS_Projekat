@@ -47,6 +47,12 @@ func (srw *TCPServer) SendEvent(dev *Device, message string) {
 	WSMessage(dev.ID, EVENT_MSG, message, render)
 }
 
+func (srw *TCPServer) SendMessage( sender, message string ){
+	srw.logger.Infof("From %s : %s", sender, message)
+	render := fmt.Sprintf(EVENT_HTML, time.Now().Format("2006-01-02 3:4:5"), sender, " " + message )
+	WSMessage(message, EVENT_MSG, fmt.Sprintf("from %s", sender), render)
+}
+
 func (srw *TCPServer) messageSender() chan Message {
 	ch := make(chan Message, 32)
 	go func() {

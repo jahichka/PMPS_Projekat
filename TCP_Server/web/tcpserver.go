@@ -103,6 +103,7 @@ func (srw *TCPServer) CloseConn(conn net.Conn) {
 }
 
 func (srw *TCPServer) CloseDev(dev *Device) {
+	srw.SendMessage(dev.ID, "connection closed")
 	renderOff := fmt.Sprintf(DEV_HTML, dev.Name, dev.ID, COLOR_OFF)
 	WSMessage(dev.ID, EVENT_STATE, "logout", renderOff)
 	dev.State = STATE_OFF
@@ -112,6 +113,8 @@ func (srw *TCPServer) CloseDev(dev *Device) {
 func (srw *TCPServer) connectionHandler(conn net.Conn) {
 	buffer := make([]byte, 1024)
 	defer srw.CloseConn(conn)
+
+	srw.SendMessage(conn.RemoteAddr().String(), "Auth request")
 
 	// write anything to test the connection
 	_, err := conn.Write([]byte("ID: "))
@@ -123,10 +126,14 @@ func (srw *TCPServer) connectionHandler(conn net.Conn) {
 	conn.SetReadDeadline(time.Now().Add(time.Second * 10))
 	size, err := conn.Read(buffer)
 	if err != nil {
+		srw.SendMessage(conn.RemoteAddr().String(), "Auth timeout")
 		return
 	}
 
 	id := strings.TrimSuffix(string(buffer[:size]), "\n")
+	if id == "" {
+		return
+	}
 
 	if _, ok := srw.devices[id]; !ok {
 		srw.devices[id] = &Device{
@@ -138,7 +145,7 @@ func (srw *TCPServer) connectionHandler(conn net.Conn) {
 
 	renderOn := fmt.Sprintf(DEV_HTML, srw.devices[id].Name, id, COLOR_ON)
 
-	srw.logger.Infof("Connection accepted: %v", conn.RemoteAddr().String())
+	srw.SendMessage(conn.RemoteAddr().String(), fmt.Sprintf(" Authenticated as %s", id))
 	WSMessage(id, EVENT_STATE, "login", renderOn)
 
 	defer srw.CloseDev(srw.devices[id])
