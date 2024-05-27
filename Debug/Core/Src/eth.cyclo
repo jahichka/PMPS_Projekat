@@ -6,6 +6,8 @@
 ../Core/Src/eth.c:54:6:wizchipWriteByte	1
 ../Core/Src/eth.c:60:6:Callback_IPAssigned	1
 ../Core/Src/eth.c:64:6:Callback_IPConflict	1
-../Core/Src/eth.c:71:6:ETH_Init	4
-../Core/Src/eth.c:127:9:ETH_SocketInit	2
-../Core/Src/eth.c:137:9:ETH_Connect	4
+../Core/Src/eth.c:71:9:ETH_Init	4
+../Core/Src/eth.c:128:9:ETH_SocketInit	2
+../Core/Src/eth.c:138:9:ETH_Connect	4
+../Core/Src/eth.c:177:8:ETH_Listen	4
+../Core/Src/eth.c:189:6:ETH_Send	1

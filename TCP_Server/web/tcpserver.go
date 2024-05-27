@@ -2,9 +2,9 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
@@ -20,7 +20,7 @@ type TCPServer struct {
 	listener *net.TCPListener
 	stop     context.CancelFunc
 	devices  map[string]*Device
-	msgChan  chan Message
+	msgChan  chan *Message
 }
 
 func CreateTCPServer(port string, logger logrus.Entry) error {
@@ -117,7 +117,7 @@ func (srw *TCPServer) connectionHandler(conn net.Conn) {
 	srw.SendMessage(conn.RemoteAddr().String(), "Auth request")
 
 	// write anything to test the connection
-	_, err := conn.Write([]byte("ID: "))
+	_, err := conn.Write([]byte("LOGIN\r\n"))
 	if err != nil {
 		srw.logger.Error(err.Error())
 		return
@@ -130,29 +130,34 @@ func (srw *TCPServer) connectionHandler(conn net.Conn) {
 		return
 	}
 
-	id := strings.TrimSuffix(string(buffer[:size]), "\n")
-	if id == "" {
-		return
+	var jsonData Device
+	if err := json.Unmarshal(buffer[:size], &jsonData); err != nil {
+		srw.SendMessage("INTERNAL", "Json parsing error")
 	}
 
-	if _, ok := srw.devices[id]; !ok {
-		srw.devices[id] = &Device{
-			ID:    id,
-			Name:  "Vjetroelektrana Zivinice",
-			State: STATE_ON,
+	if jsonData.ID == "" {
+		srw.SendMessage(conn.RemoteAddr().String(), fmt.Sprintf("Failed to autenticate (bad ID '%s')", jsonData.ID))
+		return
+	}
+	if _, ok := srw.devices[jsonData.ID]; !ok {
+		srw.devices[jsonData.ID] = &jsonData
+		srw.SendMessage(conn.RemoteAddr().String(), fmt.Sprintf("New device register as %s", jsonData.ID))
+	} else {
+		if jsonData.Auth == srw.devices[jsonData.ID].Auth {
+			srw.SendMessage(conn.RemoteAddr().String(), fmt.Sprintf("Authenticated as %s", jsonData.ID))
+		} else {
+			srw.SendMessage(conn.RemoteAddr().String(), fmt.Sprintf("Failed to autenticate as %s (wrong auth token)", jsonData.ID))
+			return
 		}
 	}
 
-	renderOn := fmt.Sprintf(DEV_HTML, srw.devices[id].Name, id, COLOR_ON)
+	render := fmt.Sprintf(DEV_HTML, jsonData.Name, jsonData.ID, COLOR_ON)
+	WSMessage(jsonData.ID, EVENT_STATE, "login", render)
 
-	srw.SendMessage(conn.RemoteAddr().String(), fmt.Sprintf(" Authenticated as %s", id))
-	WSMessage(id, EVENT_STATE, "login", renderOn)
-
-	defer srw.CloseDev(srw.devices[id])
+	defer srw.CloseDev(srw.devices[jsonData.ID])
 
 loop:
 	for {
-		buffer := make([]byte, 1024)
 		select {
 		case <-srw.ctx.Done():
 			break loop
@@ -162,9 +167,10 @@ loop:
 			if err != nil {
 				break loop
 			}
-			srw.msgChan <- Message{
+			fmt.Println("WRITING A MESSAGE")
+			srw.msgChan <- &Message{
 				Conn:   conn,
-				Dev:    srw.devices[id],
+				Dev:    srw.devices[jsonData.ID],
 				Buffer: buffer,
 				Size:   size,
 			}

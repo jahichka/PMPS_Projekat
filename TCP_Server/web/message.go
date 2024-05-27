@@ -53,8 +53,8 @@ func (srw *TCPServer) SendMessage( sender, message string ){
 	WSMessage(message, EVENT_MSG, fmt.Sprintf("from %s", sender), render)
 }
 
-func (srw *TCPServer) messageSender() chan Message {
-	ch := make(chan Message, 32)
+func (srw *TCPServer) messageSender() chan *Message {
+	ch := make(chan *Message, 32)
 	go func() {
 		for {
 			select {

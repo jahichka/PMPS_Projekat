@@ -68,8 +68,7 @@ void Callback_IPConflict(void) {
 uint8_t dhcp_buffer[1024];
 uint8_t dns_buffer[1024];
 
-void ETH_Init() {
-
+uint8_t ETH_Init() {
 	// Register W5500 callbacks
 	reg_wizchip_cs_cbfunc(wizchipSelect, wizchipUnselect);
 	reg_wizchip_spi_cbfunc(wizchipReadByte, wizchipWriteByte);
@@ -96,7 +95,7 @@ void ETH_Init() {
 	if (!ip_assigned) {
 		sprintf(msgbuf, "Failed to obtain IP, returning ... \r\n");
 		HAL_UART_Transmit(&huart6, (uint8_t*) msgbuf, strlen(msgbuf), 100);
-		return;
+		return 0;
 	}
 	sprintf(msgbuf, "Network configuration obtained!\r\n-----------------------\r\n");
 	HAL_UART_Transmit(&huart6, (uint8_t*)msgbuf, strlen(msgbuf), 100);
@@ -122,6 +121,8 @@ void ETH_Init() {
 			net_info.sn[0], net_info.sn[1], net_info.sn[2], net_info.sn[3],
 			net_info.gw[0], net_info.gw[1], net_info.gw[2], net_info.gw[3]);
 	HAL_UART_Transmit(&huart6, (uint8_t*) msgbuf, strlen(msgbuf), 100);
+
+	return 1;
 }
 
 uint8_t ETH_SocketInit(uint8_t *sck) {
@@ -159,6 +160,10 @@ uint8_t ETH_Connect(uint8_t *sck, char *server) {
 		return -2;
 	}
 
+	sprintf(msgbuf, "Attempting to connect to %d.%d.%d.%d:%d\r\n", server_ip[0], server_ip[1],
+				server_ip[2], server_ip[3], server_port);
+	UART_Send();
+
 	int8_t ret;
 	if ((ret = connect(*sck, server_ip, server_port)) != SOCK_OK) {
 		return -1;
@@ -168,3 +173,22 @@ uint8_t ETH_Connect(uint8_t *sck, char *server) {
 	HAL_UART_Transmit(&huart6, (uint8_t*) msgbuf, strlen(msgbuf), 100);
 	return 0;
 }
+
+int8_t ETH_Listen(uint8_t *sck, char* buf){
+	int RSR_Len = 0, repeat = 500;
+	while(!RSR_Len && repeat){
+		RSR_Len = getSn_RX_RSR(*sck);
+	}
+	if(!repeat){
+		return 0;
+	} else {
+		return recv(*sck, buf, RSR_Len);
+	}
+}
+
+void ETH_Send(uint8_t* sck, char* msg){
+	send(*sck, (uint8_t*)msg, strlen(msg));
+}
+
+
+

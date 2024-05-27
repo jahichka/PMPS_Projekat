@@ -61,6 +61,8 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define ETH_CS_Pin GPIO_PIN_4
 #define ETH_CS_GPIO_Port GPIOA
+#define ETH_IRQ_Pin GPIO_PIN_4
+#define ETH_IRQ_GPIO_Port GPIOC
 
 /* USER CODE BEGIN Private defines */
 

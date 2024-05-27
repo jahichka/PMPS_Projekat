@@ -61,6 +61,10 @@ func (webServer *Server) wsConn(c *gin.Context) {
 	if err != nil {
 		return
 	}
+
+	if _, exists := webServer.Connections[conn.RemoteAddr().String()]; exists {
+		delete(webServer.Connections, conn.RemoteAddr().String())
+	}
 	webServer.Connections[conn.RemoteAddr().String()] = conn
 
 	for _, dev := range tcpServer.devices {
