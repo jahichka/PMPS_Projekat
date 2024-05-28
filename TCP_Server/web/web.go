@@ -1,21 +1,13 @@
 package web
 
 import (
-	"net/http"
 	"fmt"
+	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
-
-const devHTML = `
-<div class="ui raised segment">
-  <tr id="%s">
-    <td> %s (%s) </td>
-    <td style="background-color: %s;"></td>
-  </tr>
-</div>
-`
 
 type Server struct {
 	Engine      *gin.Engine
@@ -67,15 +59,16 @@ func (webServer *Server) wsConn(c *gin.Context) {
 	}
 	webServer.Connections[conn.RemoteAddr().String()] = conn
 
+	var sb strings.Builder
+
 	for _, dev := range tcpServer.devices {
-		fmt.Println(dev)
 		color := ""
 		if ( dev.State == STATE_ON ) {
 			color = COLOR_ON
 		} else {
 			color = COLOR_OFF
 		}
-		render := fmt.Sprintf(DEV_HTML, dev.Name, dev.ID, color)
-		WSMessage(dev.ID, EVENT_STATE, "login", render )
+		sb.WriteString(fmt.Sprintf(DEV_HTML_FULL, dev.ID, dev.Name, dev.ID, color))
 	}
+		WSMessage("", EVENT_LOGIN, "Welcome, here are registered devices", sb.String())
 }

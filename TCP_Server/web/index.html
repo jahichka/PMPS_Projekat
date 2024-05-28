@@ -8,21 +8,12 @@
     <script>
 			let socket = null;
 
-			const statusColor = {
-    			UNKNOWN: 'gray',
-    			NOT_INUSE: 'green',
-    			INUSE: 'blue',
-    			BUSY: 'red',
-    			INVALID: 'purple',
-    			UNAVAILABLE: 'orange',
-    			RINGING: 'yellow',
-    			RINGINUSE: 'orange',
-    			ONHOLD: 'lightblue',
-			};
-
             function connect(){
     			socket = new WebSocket("ws://localhost:8000/ws");
+    			const ld = document.getElementById("loader")
+                ld.style.display = "block";
     			socket.onopen = (data) => {
+                    ld.style.display = "none";
         			console.log("Websocket connection established")
     			}
     			socket.onclose = () => {
@@ -57,6 +48,9 @@
 
                             var feed = document.getElementById("feed")
                             feed.insertBefore(newEvent, feed.firstChild)
+						    break;
+						case "login":
+						    document.getElementById('devices').innerHTML = jmsg.render;
 						    break;
 					    default:
 						    console.log("unknown event")
@@ -97,6 +91,9 @@
 </head>
 
 <body>
+  <div class="ui active dimmer" id="loader">
+      <div class="ui text loader">Loading</div>
+  </div>
     <div class="ui two column stackable center aligned grid">
         <div class="ui container">
           <div class="ui secondary segment">
@@ -104,22 +101,6 @@
           </div>
           <table class="ui definition table">
             <tbody id="devices">
-            	<tr id="101-A-101">
-            		<td> vjetroelektrana zivinice (101-A-101) </td>
-            		<td style="background-color: #ff6961;"></td>
-            	</tr>
-            	<tr>
-            		<td> Vjetroelektrana Kojsino (225-A-883) </td>
-            		<td style="background-color: #77dd77;"></td>
-            	</tr>
-            	<tr>
-            		<td> Vjetroelektrana Konjic (115-M-552) </td>
-            		<td style="background-color: #77dd77;"></td>
-            	</tr>
-            	<tr>
-            		<td> Vjetroelektrana Sarajevo (112-T-233) </td>
-            		<td style="background-color: #ff6961;"></td>
-            	</tr>
             </tbody>
           </table>
         </div>

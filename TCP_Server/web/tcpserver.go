@@ -59,7 +59,7 @@ func newTCPServer(ctx context.Context, port string, logger logrus.Entry) (*TCPSe
 		logger:   logger,
 		ctx:      ctx,
 		Wg:       &sync.WaitGroup{},
-		devices:  make(map[string]*Device, 0),
+		devices:  CreateMockDevices(),
 	}, nil
 }
 

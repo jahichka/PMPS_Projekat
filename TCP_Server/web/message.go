@@ -10,6 +10,7 @@ import (
 const (
 	EVENT_STATE = "state"
 	EVENT_MSG   = "message"
+	EVENT_LOGIN = "login"
 
 	STATE_OFF = 0
 	STATE_ON  = 1
@@ -21,6 +22,8 @@ const (
     <td> %s (%s) </td>
     <td style="background-color: %s;"></td>
 	`
+
+	DEV_HTML_FULL = "<tr id=%s>" + DEV_HTML + "</tr>"
 
 	EVENT_HTML = `
     	<div class="content">
