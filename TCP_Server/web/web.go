@@ -68,6 +68,7 @@ func (webServer *Server) wsConn(c *gin.Context) {
 	webServer.Connections[conn.RemoteAddr().String()] = conn
 
 	for _, dev := range tcpServer.devices {
+		fmt.Println(dev)
 		color := ""
 		if ( dev.State == STATE_ON ) {
 			color = COLOR_ON

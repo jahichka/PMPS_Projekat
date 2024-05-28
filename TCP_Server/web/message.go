@@ -11,8 +11,8 @@ const (
 	EVENT_STATE = "state"
 	EVENT_MSG   = "message"
 
-	STATE_ON  = 1
 	STATE_OFF = 0
+	STATE_ON  = 1
 
 	COLOR_ON  = "#77dd77"
 	COLOR_OFF = "#ff6961"

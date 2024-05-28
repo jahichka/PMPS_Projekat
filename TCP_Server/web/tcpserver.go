@@ -117,7 +117,7 @@ func (srw *TCPServer) connectionHandler(conn net.Conn) {
 	srw.SendMessage(conn.RemoteAddr().String(), "Auth request")
 
 	// write anything to test the connection
-	_, err := conn.Write([]byte("LOGIN\r\n"))
+	_, err := conn.Write([]byte("auth"))
 	if err != nil {
 		srw.logger.Error(err.Error())
 		return
@@ -132,6 +132,7 @@ func (srw *TCPServer) connectionHandler(conn net.Conn) {
 
 	var jsonData Device
 	if err := json.Unmarshal(buffer[:size], &jsonData); err != nil {
+		fmt.Println(string(buffer[:size]))
 		srw.SendMessage("INTERNAL", "Json parsing error")
 	}
 
@@ -139,7 +140,7 @@ func (srw *TCPServer) connectionHandler(conn net.Conn) {
 		srw.SendMessage(conn.RemoteAddr().String(), fmt.Sprintf("Failed to autenticate (bad ID '%s')", jsonData.ID))
 		return
 	}
-	if _, ok := srw.devices[jsonData.ID]; !ok {
+	if _, devExists := srw.devices[jsonData.ID]; !devExists {
 		srw.devices[jsonData.ID] = &jsonData
 		srw.SendMessage(conn.RemoteAddr().String(), fmt.Sprintf("New device register as %s", jsonData.ID))
 	} else {
@@ -150,6 +151,7 @@ func (srw *TCPServer) connectionHandler(conn net.Conn) {
 			return
 		}
 	}
+	srw.devices[jsonData.ID].State = STATE_ON
 
 	render := fmt.Sprintf(DEV_HTML, jsonData.Name, jsonData.ID, COLOR_ON)
 	WSMessage(jsonData.ID, EVENT_STATE, "login", render)
