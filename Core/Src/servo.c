@@ -35,20 +35,12 @@ void SERVO_SetAngle(int angle) {
 	if( angle < 0 || angle > 90 )
 		return;
 
-	SERVO_On();
-
 	float segment = ((float)(FULL_ANGLE - MIN_ANGLE) / 90);
 	uint32_t set_angle = (MIN_ANGLE+(segment*angle));
 	__HAL_TIM_SetCompare(PWM_Timer, TIM_CHANNEL_1, set_angle);
-
-	HAL_Delay(500);
-	SERVO_Off();
 }
 
 void SERVO_StartSweep(int count) {
-
-	SERVO_On();
-
 	int angle = MIN_ANGLE, incr = 10;
 	for (int i = 0; i < count; ++i) {
 		do {
@@ -62,6 +54,4 @@ void SERVO_StartSweep(int count) {
 			HAL_Delay(100);
 		} while (angle >= MIN_ANGLE);
 	}
-
-	SERVO_Off();
 }

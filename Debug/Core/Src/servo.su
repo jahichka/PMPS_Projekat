@@ -2,4 +2,4 @@
 ../Core/Src/servo.c:25:6:SERVO_Off	8	static
 ../Core/Src/servo.c:29:6:SERVO_Init	8	static
 ../Core/Src/servo.c:34:6:SERVO_SetAngle	24	static
-../Core/Src/servo.c:48:6:SERVO_StartSweep	32	static
+../Core/Src/servo.c:43:6:SERVO_StartSweep	32	static

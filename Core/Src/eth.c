@@ -9,14 +9,7 @@
 #define false 0
 #define true 1
 
-#define DHCP_SOCKET     0
-#define DNS_SOCKET      1
-#define HTTP_SOCKET     2
-#define SOCK_TCPS       0
-#define SOCK_UDPS       1
-#define PORT_TCPS       5000
-#define PORT_UDPS       3000
-#define MAX_HTTPSOCK    6
+#define DHCP_SOCKET     1
 
 extern SPI_HandleTypeDef hspi1;
 extern UART_HandleTypeDef huart6;
@@ -128,11 +121,12 @@ uint8_t ETH_Init() {
 uint8_t ETH_SocketInit(uint8_t *sck) {
 	int8_t ret;
 	if ((ret = socket(*sck, Sn_MR_TCP, 5000, SF_TCP_NODELAY)) != 0) {
-		return -1;
+		return 0;
 	}
-	sprintf(msgbuf, "Socket initialized!\r\n");
-	HAL_UART_Transmit(&huart6, (uint8_t*) msgbuf, strlen(msgbuf), 100);
-	return 0;
+	setSn_IR(*sck, 0x1f);
+	setSn_IMR(*sck, 0x04);
+	setSIMR(0x01);
+	return 1;
 }
 
 uint8_t ETH_Connect(uint8_t *sck, char *server) {
@@ -182,13 +176,11 @@ int8_t ETH_Listen(uint8_t *sck, char* buf){
 	if(!repeat){
 		return 0;
 	} else {
-		return recv(*sck, buf, RSR_Len);
+		setSn_IR(*sck, 0x1f);
+		return recv(*sck, (uint8_t*)buf, RSR_Len);
 	}
 }
 
 void ETH_Send(uint8_t* sck, char* msg){
 	send(*sck, (uint8_t*)msg, strlen(msg));
 }
-
-
-
