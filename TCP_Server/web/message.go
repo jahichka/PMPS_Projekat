@@ -39,20 +39,20 @@ const (
 
 type Message struct {
 	Conn   net.Conn
-	Dev    *Device
+	DevID  string
 	Buffer []byte
 	Size   int
 }
 
-func (srw *TCPServer) SendEvent(dev *Device, message string) {
+func (srw *TCPServer) SendEvent(devId string, message string) {
 	currentTime := time.Now()
-	render := fmt.Sprintf(EVENT_HTML, currentTime.Format("2006-01-02 3:4:5"), dev.ID, message)
-	WSMessage(dev.ID, EVENT_MSG, message, render)
+	render := fmt.Sprintf(EVENT_HTML, currentTime.Format("2006-01-02 3:4:5"), devId, message)
+	WSMessage(devId, EVENT_MSG, message, render)
 }
 
-func (srw *TCPServer) SendMessage( sender, message string ){
+func (srw *TCPServer) SendMessage(sender, message string) {
 	srw.logger.Infof("From %s : %s", sender, message)
-	render := fmt.Sprintf(EVENT_HTML, time.Now().Format("2006-01-02 3:4:5"), sender, " " + message )
+	render := fmt.Sprintf(EVENT_HTML, time.Now().Format("2006-01-02 3:4:5"), sender, " "+message)
 	WSMessage(message, EVENT_MSG, fmt.Sprintf("from %s", sender), render)
 }
 
@@ -64,7 +64,7 @@ func (srw *TCPServer) messageSender() chan *Message {
 			case msg := <-ch:
 				logMsg := fmt.Sprintf("Received message from %s - '%s'", msg.Conn.RemoteAddr().String(), strings.TrimSuffix(string(msg.Buffer[:msg.Size]), "\n"))
 				srw.logger.Info(logMsg)
-				srw.SendEvent(msg.Dev, strings.TrimSuffix(string(msg.Buffer[:msg.Size]), "\n"))
+				srw.SendEvent(msg.DevID, strings.TrimSuffix(string(msg.Buffer[:msg.Size]), "\n"))
 			}
 		}
 	}()

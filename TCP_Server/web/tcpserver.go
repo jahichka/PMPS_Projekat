@@ -3,7 +3,9 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -21,6 +23,7 @@ type TCPServer struct {
 	stop     context.CancelFunc
 	devices  map[string]*Device
 	msgChan  chan *Message
+	sendChan chan *Message
 }
 
 func CreateTCPServer(port string, logger logrus.Entry) error {
@@ -59,7 +62,8 @@ func newTCPServer(ctx context.Context, port string, logger logrus.Entry) (*TCPSe
 		logger:   logger,
 		ctx:      ctx,
 		Wg:       &sync.WaitGroup{},
-		devices:  CreateMockDevices(),
+		devices:  make(map[string]*Device),
+		sendChan: make(chan *Message, 16),
 	}, nil
 }
 
@@ -77,11 +81,12 @@ func (srw *TCPServer) Start() {
 			case <-srw.ctx.Done():
 				srw.Shutdown()
 				return
+			case msg := <-srw.sendChan:
+				srw.devices[msg.DevID].WriteChan <- string(msg.Buffer[:msg.Size])
 			default:
-				srw.logger.Info("Listening for new connection ... ")
+				srw.listener.SetDeadline(time.Now().Add(time.Second + 2))
 				conn, err := srw.listener.Accept()
 				if err != nil {
-					fmt.Printf("no new clients\n")
 					continue // if no connection was made, skip
 				}
 				srw.Wg.Add(1)
@@ -111,71 +116,88 @@ func (srw *TCPServer) CloseDev(dev *Device) {
 
 // connectionHandler reads from and writes data to a TCP client connected to the server
 func (srw *TCPServer) connectionHandler(conn net.Conn) {
-	buffer := make([]byte, 1024)
 	defer srw.CloseConn(conn)
+	buffer := make([]byte, 1024)
 
 	srw.SendMessage(conn.RemoteAddr().String(), "Auth request")
 
-	// write anything to test the connection
 	_, err := conn.Write([]byte("auth"))
 	if err != nil {
 		srw.logger.Error(err.Error())
 		return
 	}
 
-	conn.SetReadDeadline(time.Now().Add(time.Second * 10))
-	size, err := conn.Read(buffer)
+	device, err := srw.AuthHandler(conn, buffer)
 	if err != nil {
-		srw.SendMessage(conn.RemoteAddr().String(), "Auth timeout")
 		return
 	}
+	defer srw.CloseDev(device)
 
-	var jsonData Device
-	if err := json.Unmarshal(buffer[:size], &jsonData); err != nil {
-		fmt.Println(string(buffer[:size]))
-		srw.SendMessage("INTERNAL", "Json parsing error")
-	}
-
-	if jsonData.ID == "" {
-		srw.SendMessage(conn.RemoteAddr().String(), fmt.Sprintf("Failed to autenticate (bad ID '%s')", jsonData.ID))
-		return
-	}
-	if _, devExists := srw.devices[jsonData.ID]; !devExists {
-		srw.devices[jsonData.ID] = &jsonData
-		srw.SendMessage(conn.RemoteAddr().String(), fmt.Sprintf("New device register as %s", jsonData.ID))
-	} else {
-		if jsonData.Auth == srw.devices[jsonData.ID].Auth {
-			srw.SendMessage(conn.RemoteAddr().String(), fmt.Sprintf("Authenticated as %s", jsonData.ID))
-		} else {
-			srw.SendMessage(conn.RemoteAddr().String(), fmt.Sprintf("Failed to autenticate as %s (wrong auth token)", jsonData.ID))
-			return
-		}
-	}
-	srw.devices[jsonData.ID].State = STATE_ON
-
-	render := fmt.Sprintf(DEV_HTML, jsonData.Name, jsonData.ID, COLOR_ON)
-	WSMessage(jsonData.ID, EVENT_STATE, "login", render)
-
-	defer srw.CloseDev(srw.devices[jsonData.ID])
+	render := fmt.Sprintf(DEV_HTML, device.Name, device.ID, COLOR_ON)
+	WSMessage(device.ID, EVENT_STATE, "login", render)
+	countdown := 0
 
 loop:
 	for {
 		select {
 		case <-srw.ctx.Done():
 			break loop
-		default:
-			conn.SetDeadline(time.Now().Add(time.Minute)) // don't block if the connection is not alive
-			size, err := conn.Read(buffer)
-			if err != nil {
+		case msg := <-device.WriteChan:
+			conn.SetDeadline(time.Now().Add(time.Second * 5))
+			if _, err := conn.Write([]byte(msg)); err != nil {
+				fmt.Println(err)
 				break loop
 			}
-			fmt.Println("WRITING A MESSAGE")
-			srw.msgChan <- &Message{
-				Conn:   conn,
-				Dev:    srw.devices[jsonData.ID],
-				Buffer: buffer,
-				Size:   size,
+		default:
+			conn.SetDeadline(time.Now().Add(time.Second)) // don't block if the connection is not alive
+			size, err := conn.Read(buffer)
+			if err != nil {
+				if err != io.EOF && countdown < 60 {
+					countdown++
+					continue
+				}
+				break loop
 			}
+			countdown = 0
+			srw.msgChan <- &Message{conn, device.ID, buffer, size}
 		}
 	}
+}
+
+func (srw *TCPServer) AuthHandler(conn net.Conn, buffer []byte) (*Device, error) {
+	conn.SetReadDeadline(time.Now().Add(time.Second * 10))
+	size, err := conn.Read(buffer)
+	if err != nil {
+		srw.SendMessage(conn.RemoteAddr().String(), "Auth timeout")
+		return nil, err
+	}
+
+	var newDev Device
+	if err := json.Unmarshal(buffer[:size], &newDev); err != nil {
+		fmt.Println(string(buffer[:size]))
+		srw.SendMessage("INTERNAL", "Json parsing error")
+		return nil, err
+	}
+
+	if newDev.ID == "" {
+		srw.SendMessage(conn.RemoteAddr().String(), fmt.Sprintf("Failed to autenticate (bad ID '%s')", newDev.ID))
+		return nil, errors.New("Bad login id")
+	}
+
+	if _, devExists := srw.devices[newDev.ID]; devExists {
+		if newDev.Auth == srw.devices[newDev.ID].Auth {
+			srw.SendMessage(conn.RemoteAddr().String(), fmt.Sprintf("Authenticated as %s", newDev.ID))
+		} else {
+			srw.SendMessage(conn.RemoteAddr().String(), fmt.Sprintf("Failed to autenticate as %s (wrong auth token)", newDev.ID))
+			return nil, err
+		}
+	} else {
+		srw.SendMessage(conn.RemoteAddr().String(), fmt.Sprintf("New device register as %s", newDev.ID))
+	}
+
+	newDev.State = STATE_ON
+	newDev.WriteChan = make(chan string, 4)
+	srw.devices[newDev.ID] = &newDev
+
+	return &newDev, nil
 }

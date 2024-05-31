@@ -1,10 +1,11 @@
 package web
 
 type Device struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Auth  string `json:"auth"`
-	State int
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Auth      string `json:"auth"`
+	State     int
+	WriteChan chan string
 }
 
 func GetDevlist() map[string]*Device {
