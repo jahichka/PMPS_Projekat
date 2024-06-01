@@ -23,7 +23,7 @@ type TCPServer struct {
 	stop     context.CancelFunc
 	devices  map[string]*Device
 	msgChan  chan *Message
-	sendChan chan *Message
+	SendChan chan *Message
 }
 
 func CreateTCPServer(port string, logger logrus.Entry) error {
@@ -62,8 +62,7 @@ func newTCPServer(ctx context.Context, port string, logger logrus.Entry) (*TCPSe
 		logger:   logger,
 		ctx:      ctx,
 		Wg:       &sync.WaitGroup{},
-		devices:  make(map[string]*Device),
-		sendChan: make(chan *Message, 16),
+		devices:  CreateMockDevices(),
 	}, nil
 }
 
@@ -81,8 +80,6 @@ func (srw *TCPServer) Start() {
 			case <-srw.ctx.Done():
 				srw.Shutdown()
 				return
-			case msg := <-srw.sendChan:
-				srw.devices[msg.DevID].WriteChan <- string(msg.Buffer[:msg.Size])
 			default:
 				srw.listener.SetDeadline(time.Now().Add(time.Second + 2))
 				conn, err := srw.listener.Accept()
@@ -109,8 +106,8 @@ func (srw *TCPServer) CloseConn(conn net.Conn) {
 
 func (srw *TCPServer) CloseDev(dev *Device) {
 	srw.SendMessage(dev.ID, "connection closed")
-	renderOff := fmt.Sprintf(DEV_HTML, dev.Name, dev.ID, COLOR_OFF)
-	WSMessage(dev.ID, EVENT_STATE, "logout", renderOff)
+	render := fmt.Sprintf(DEV_HTML_FULL, dev.ID, dev.Name, dev.ID, COLOR_OFF)
+	WSMessage(dev.ID, EVENT_STATE, "logout", render)
 	dev.State = STATE_OFF
 }
 
@@ -133,7 +130,7 @@ func (srw *TCPServer) connectionHandler(conn net.Conn) {
 	}
 	defer srw.CloseDev(device)
 
-	render := fmt.Sprintf(DEV_HTML, device.Name, device.ID, COLOR_ON)
+	render := fmt.Sprintf(DEV_HTML_FULL, device.ID, device.Name, device.ID, COLOR_ON)
 	WSMessage(device.ID, EVENT_STATE, "login", render)
 	countdown := 0
 

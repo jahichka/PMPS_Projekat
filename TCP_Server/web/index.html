@@ -1,119 +1,242 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-
-<head>
+  <head>
     <script src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.4.1/semantic.min.css">
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.4.1/semantic.min.css"
+    />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.4.1/semantic.min.js"></script>
     <script>
-			let socket = null;
+      let socket = null;
 
-            function connect(){
-    			socket = new WebSocket("ws://localhost:8000/ws");
-    			const ld = document.getElementById("loader")
-                ld.style.display = "block";
-    			socket.onopen = (data) => {
-                    ld.style.display = "none";
-        			console.log("Websocket connection established")
-    			}
-    			socket.onclose = () => {
-                    console.log('Socket is closed. Reconnect will be attempted in 1 second.');
-                    setTimeout(function() {
-                      connect();
-                    }, 1000);
-    			}
-    			socket.onerror = error => {
-        			console.log(error)
-    			}
-    			socket.onmessage = msg => {
-        			let jmsg = JSON.parse(msg.data)
-        			switch (jmsg.event){
-					    case "state":
-						    let element = document.getElementById(jmsg.id)
-						    if (element){
-						        element.innerHTML = jmsg.render
-						    } else {
-						        var newRow = document.createElement("tr")
-						        newRow.innerHTML = jmsg.render
-                                newRow.setAttribute("id", jmsg.id)
+      function connect() {
+        socket = new WebSocket("ws://localhost:8000/ws");
+        document.getElementById("devtext").innerHTML = `<h3>Connecting ...</h3>`
+        socket.onopen = (data) => {
+          document.getElementById("devtext").innerHTML = `<h3>Devices</h3>`
+        };
+        socket.onclose = () => {
+          setTimeout(function () {
+            connect();
+          }, 1000);
+        };
+        socket.onerror = (error) => {
+        };
+        socket.onmessage = (msg) => {
+          let jmsg = JSON.parse(msg.data);
+          switch (jmsg.event) {
+            case "state":
+              let element = document.getElementById(jmsg.id);
+              if (element) {
+                document.getElementById(jmsg.id).outerHTML = jmsg.render
+              } else {
+                document.getElementById("devices").innerHTML += jmsg.render;
+              }
+              break;
+            case "message":
+              var newEvent = document.createElement("div");
+              newEvent.className = "event";
+              newEvent.innerHTML = jmsg.render;
 
-						        document.getElementById('devices').appendChild(newRow)
-						    }
-						    break;
-					    case "message":
-						    console.log("Recieved a message from", jmsg.id, " :", jmsg.data)
-						    var newEvent = document.createElement("div")
-						    newEvent.className = "event"
-                            newEvent.innerHTML = jmsg.render
+              var feed = document.getElementById("feed");
+              feed.insertBefore(newEvent, feed.firstChild);
+              break;
+            case "login":
+              document.getElementById("devices").innerHTML = jmsg.render;
+              break;
+            default:
+              break;
+          }
+        };
+      }
 
-                            var feed = document.getElementById("feed")
-                            feed.insertBefore(newEvent, feed.firstChild)
-						    break;
-						case "login":
-						    document.getElementById('devices').innerHTML = jmsg.render;
-						    break;
-					    default:
-						    console.log("unknown event")
-						    break;
-				    }
-    			}
+      document.addEventListener("DOMContentLoaded", connect);
+
+      function openOverlay(devId) {
+        document.getElementById("matrcreate").setAttribute('onclick', `createMatrix('${devId}')`)
+        $(".dimmer").dimmer("show");
+      }
+
+      function createMatrix(devId) {
+        var rows = parseInt(document.getElementById("rows").value);
+        var columns = parseInt(document.getElementById("cols").value);
+
+        if (isNaN(rows) || isNaN(columns)) {
+          alert("Please enter valid integer values for rows and columns.");
+          return;
+        }
+
+        const matr = document.getElementById("matrix");
+        matr.innerHTML = "";
+
+        var form = "";
+        var row = `
+                    <div class="ui inline fields">
+                        <div class="two wide field">
+                            <label>Headers</label>
+                        </div>`;
+        <!-- append the rest : -->
+        for (let i = 0; i < rows + 1; i++) {
+          for (let j = 0; j < columns; j++) {
+            var id = i + "_" + (j + 1);
+            row += `<div class="two wide field">
+                                    <input type="text" placeholder="${id}" id="${id}">
+                                </div>`;
+          }
+          form += row + `</div>`;
+          var id = i + 1 + "_" + 0;
+          row = `<div class="ui inline fields">
+                            <div class="two wide field">
+                                <input type="text" placeholder="${id}" id="${id}">
+                            </div>`;
+        }
+        form += `<button class="negative ui button" type="submit" onclick="resetMatrix()">Reset</button>
+                        <button class="positive ui button" type="submit" onclick="sendMatrix(${rows}, ${columns}, '${devId}')">Submit</button>`;
+        matr.innerHTML = form;
+      }
+
+      function sendMatrix(rows, cols, devId) {
+        wind_speeds = [];
+        prev_val = 0;
+        for (i = 1; i <= cols; i++) {
+          speed = parseInt(document.getElementById("0_" + i).value);
+          if (isNaN(speed)) {
+            alert("Illegal value in wind speed header");
+            return;
+          }
+          if (speed < prev_val) {
+            alert("Header arrays must be sorted! (wind speed header)");
+            return;
+          }
+          prev_val = speed;
+          wind_speeds.push(speed);
+        }
+        prev_val = 0;
+        blade_angles = [];
+        for (i = 1; i <= rows; i++) {
+          angle = parseInt(document.getElementById(i + "_0").value);
+          if (isNaN(angle)) {
+            alert("Illegal value in blade angle header");
+            return;
+          }
+          if (angle < prev_val) {
+            alert("Header arrays must be sorted! (blade angle header)");
+            return;
+          }
+          prev_val = angle;
+          blade_angles.push(angle);
+        }
+        values = [[]];
+        for (i = 1; i <= rows; i++) {
+          values[i] = [];
+          for (j = 1; j <= cols; j++) {
+            val = parseInt(document.getElementById(i + "_" + j).value);
+            if (isNaN(val)) {
+              alert(`Illegal value in field ${i}_${j}`);
+              return;
             }
+            values[i].push(val);
+          }
+        }
+        values.shift()
+        var jsonData = {
+          wind_count: cols,
+          angle_count: rows,
+          dev_id: devId,
+          wind_speeds: wind_speeds,
+          blade_angles: blade_angles,
+          control_values: values,
+        };
 
-			document.addEventListener("DOMContentLoaded", connect)
+        fetch("/send_data", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(jsonData),
+        });
+        resetMatrix();
+      }
 
-			function createElementFromHTML(htmlString){
-			}
-
+      function resetMatrix() {
+        setTimeout(function () {
+          document.getElementById("matrix").innerHTML = "";
+        }, 1000);
+        $(".dimmer").dimmer("hide");
+      }
     </script>
     <style>
-        .ui.container {
-            text-align: center;
-            width: 600px;
-            margin-top: 40px;
-        }
+      .ui.container {
+        text-align: center;
+        width: 600px;
+        margin-top: 40px;
+      }
 
-        .ui.grid .column {
-            background-clip: content-box;
-        }
+      .ui.grid .column {
+        background-clip: content-box;
+      }
 
-        body {
-            display: block;
-            max-width: 1200px;
-            margin-left: auto;
-            margin-right: auto;
-        }
+      body {
+        display: block;
+        max-width: 1200px;
+        margin-left: auto;
+        margin-right: auto;
+      }
 
-        .ui.segment {
-            max-height: 700px;
-            overflow: scroll;
-        }
+      .ui.segment {
+        max-height: 700px;
+        overflow: scroll;
+      }
     </style>
-</head>
+  </head>
 
-<body>
-  <div class="ui active dimmer" id="loader">
-      <div class="ui text loader">Loading</div>
-  </div>
-    <div class="ui two column stackable center aligned grid">
+  <body>
+    <!-- <div class="ui active dimmer" id="loader"> -->
+    <!--   <div class="ui text loader">Loading</div> -->
+    <!-- </div> -->
+      <div class="ui form">
+        <div class="ui page dimmer" id="overlay">
+          <div class="ui segment content">
+            <h4 class="ui dividing header">Matrix Dimensions</h4>
+            <div class="three fields" style="max-width: 250px">
+              <div class="field">
+                <input type="text" name="rows" placeholder="X" id="rows" />
+              </div>
+              <p>X</p>
+              <div class="field">
+                <input type="text" name="colums" placeholder="Y" id="cols" />
+              </div>
+              <button
+                class="ui button"
+                type="submit"
+                id="matrcreate"
+                onclick='createMatrix("")'
+              >
+                Create
+              </button>
+            </div>
+            <div class="ui form" id="matrix"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ui two column stackable center aligned grid">
         <div class="ui container">
-          <div class="ui secondary segment">
+          <div class="ui secondary segment" id="devtext">
             <h3>Devices</h3>
           </div>
-          <table class="ui definition table">
-            <tbody id="devices">
-            </tbody>
+          <table class="ui celled table">
+            <tbody id="devices"></tbody>
           </table>
         </div>
         <div class="ui container">
-          <div class="ui secondary segment">
+          <div class="ui secondary segment" id="evtext">
             <h3>Event History</h3>
           </div>
           <div class="ui scrollabe segment">
-            <div class="ui feed" id="feed">
-            </div>
+            <div class="ui feed" id="feed"></div>
           </div>
         </div>
-    </div>
-</body>
-
+  </body>
 </html>
