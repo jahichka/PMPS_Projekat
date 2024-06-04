@@ -85,5 +85,27 @@ func (webServer *Server) dataHandler(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "a"})
 
-	tcpServer.devices[jsonData.DevID].WriteChan <- "PING\n"
+	fmt.Println(jsonData)
+	windc := int16(jsonData.WindCount)
+	anglec := int16(jsonData.AngleCount)
+
+	fmt.Println(windc, anglec)
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("%02d%02d", jsonData.WindCount, jsonData.AngleCount))
+	for _, sl := range [][]int{jsonData.WindSpeeds, jsonData.BladeAngles} {
+		for _, v := range sl {
+			sb.WriteString(fmt.Sprintf("%02d", v))
+		}
+	}
+	for _, sl := range jsonData.ControlValues {
+		for _, v := range sl {
+			sb.WriteString(fmt.Sprintf("%02d", v))
+		}
+	}
+	sb.WriteString("\r\n")
+
+	fmt.Println(sb.String())
+
+	tcpServer.devices[jsonData.DevID].WriteChan <- sb.String()
 }

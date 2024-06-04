@@ -116,14 +116,6 @@ func (srw *TCPServer) connectionHandler(conn net.Conn) {
 	defer srw.CloseConn(conn)
 	buffer := make([]byte, 1024)
 
-	srw.SendMessage(conn.RemoteAddr().String(), "Auth request")
-
-	_, err := conn.Write([]byte("auth"))
-	if err != nil {
-		srw.logger.Error(err.Error())
-		return
-	}
-
 	device, err := srw.AuthHandler(conn, buffer)
 	if err != nil {
 		return
@@ -149,7 +141,7 @@ loop:
 			conn.SetDeadline(time.Now().Add(time.Second)) // don't block if the connection is not alive
 			size, err := conn.Read(buffer)
 			if err != nil {
-				if err != io.EOF && countdown < 60 {
+				if err != io.EOF && countdown < 360 {
 					countdown++
 					continue
 				}
@@ -162,6 +154,14 @@ loop:
 }
 
 func (srw *TCPServer) AuthHandler(conn net.Conn, buffer []byte) (*Device, error) {
+	srw.SendMessage(conn.RemoteAddr().String(), "Auth request")
+
+	_, err := conn.Write([]byte("auth"))
+	if err != nil {
+		srw.logger.Error(err.Error())
+		return nil, err
+	}
+
 	conn.SetReadDeadline(time.Now().Add(time.Second * 10))
 	size, err := conn.Read(buffer)
 	if err != nil {

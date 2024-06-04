@@ -59,6 +59,11 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define ETH_INT_Pin GPIO_PIN_2
+#define ETH_INT_GPIO_Port GPIOA
+#define ETH_INT_EXTI_IRQn EXTI2_IRQn
+#define ETH_RST_Pin GPIO_PIN_3
+#define ETH_RST_GPIO_Port GPIOA
 #define ETH_CS_Pin GPIO_PIN_4
 #define ETH_CS_GPIO_Port GPIOA
 

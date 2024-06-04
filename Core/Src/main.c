@@ -26,6 +26,7 @@
 #include "eth.h"
 #include "servo.h"
 #include "w5500.h"
+#include "controller.h"
 
 /* USER CODE END Includes */
 
@@ -62,6 +63,8 @@ UART_HandleTypeDef *UART = &huart6;
 TIM_HandleTypeDef *PWM_Timer = &htim1;
 uint8_t sck;
 uint8_t ledstate;
+
+struct Controller* ctrl;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -105,8 +108,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-	setSn_IR(sck, 0x1f);
-	ETH_RCV = 1;
+	ETH_RCV = ETH_Recieve(&sck, ethbuf);
 }
 
 //void HAL_ADC_LevelOutOfWindowCallback(ADC_HandleTypeDef *hadc) {
@@ -127,6 +129,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+	ctrl = CTRL_ControllerInit();
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -153,9 +156,10 @@ int main(void)
   /* USER CODE BEGIN 2 */
 	SERVO_Init();
 //	int8_t rcv = 0;
-//	if (ETH_Init() && ETH_SocketInit(&sck)) {
-//		ETH_Connect(&sck, "192.168.100.6:8080");
-//	}
+	while( !ETH_Init() );
+	if (ETH_SocketInit(&sck)) {
+		ETH_Connect(&sck, "192.168.100.6:8080");
+	}
 	UART_Message("Starting the program ...\r\n");
 	HAL_UART_Receive_IT(&huart6, rx_input, 1);
 
@@ -169,40 +173,15 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 	while (1) {
 
-		HAL_Delay(500);
-//		for(int i = 0; i < 90; i+=15){
-//			SERVO_SetAngle(i);
-//			HAL_Delay(500);
-//		}
-//		for(int i = 90; i >= 0; i-=15){
-//			SERVO_SetAngle(i);
-//			HAL_Delay(500);
-//		}
-//		if (ETH_RCV) {
-//			ETH_RCV = 0;
-//			if (!ETH_Listen(&sck, ethbuf)) {
-//				UART_Message("ETH Recieve error\r\n");
-//			} else if (strcmp(ethbuf, ETH_EV_AUTH) == 0) {
-//				UART_Message("Auth request recieved\r\n");
-//				sprintf(ethbuf,
-//						"{\"id\":\"STM32-01B5\",\"name\":\"Vjetroelektrana Zivinice\",\"auth\":\"123123\"}");
-//				ETH_Send(&sck, ethbuf);
-//			} else if (strcmp(ethbuf, ETH_EV_PING) == 0) {
-//				UART_Message("Pinged!\r\n");
-//				sprintf(ethbuf, "Pong");
-//				ETH_Send(&sck, ethbuf);
-//			} else {
-//				UART_Message("Unknown event recieved\r\n");
-//			}
-//		}
-		HAL_Delay(300);
-//		for (int i = 45; i >= 20; --i){
-//			SERVO_SetAngle(i);
-//			HAL_Delay(500);
-//		}
-//		int8_t rcv = ETH_Listen(&sck, ethbuf);
-//		sprintf(msgbuf, "!! Message from server : %s", ethbuf);
-//		HAL_UART_Transmit(&huart6, (uint8_t*) msgbuf, 25 + rcv, 100);
+		HAL_Delay(2000);
+		if(ETH_RCV){
+			ETH_MessageHandler(&sck, ethbuf, ETH_RCV);
+			ETH_RCV = 0;
+		}
+		if(ctrl->heatmap){
+			char* heatstr = CTRL_HeatmapString(ctrl);
+			HAL_UART_Transmit(&huart6, (uint8_t*)heatstr, strlen(heatstr), 100);
+		}
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -464,10 +443,12 @@ static void MX_GPIO_Init(void)
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(ETH_RST_GPIO_Port, ETH_RST_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(ETH_CS_GPIO_Port, ETH_CS_Pin, GPIO_PIN_RESET);
@@ -475,18 +456,25 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_RESET);
 
+  /*Configure GPIO pin : ETH_INT_Pin */
+  GPIO_InitStruct.Pin = ETH_INT_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(ETH_INT_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : ETH_RST_Pin */
+  GPIO_InitStruct.Pin = ETH_RST_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  HAL_GPIO_Init(ETH_RST_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pin : ETH_CS_Pin */
   GPIO_InitStruct.Pin = ETH_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(ETH_CS_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PB0 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PD12 */
   GPIO_InitStruct.Pin = GPIO_PIN_12;
@@ -496,8 +484,8 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+  HAL_NVIC_SetPriority(EXTI2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI2_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */

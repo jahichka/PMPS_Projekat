@@ -1,20 +1,26 @@
 #include "stm32f4xx_hal.h"
+#include "string.h"
 #include "stdio.h"
 #include "stdlib.h"
 #include "socket.h"
 #include "dhcp.h"
 #include "w5500.h"
 #include "string.h"
+#include "controller.h"
 
 #define false 0
 #define true 1
 
 #define DHCP_SOCKET     1
 
+const char *const ETH_EV_AUTH = "auth";
+const char *const ETH_EV_PING = "ping";
+
 extern SPI_HandleTypeDef hspi1;
 extern UART_HandleTypeDef huart6;
 extern char msgbuf[1024];
 extern uint8_t recieve_buf[1024];
+extern struct Controller *ctrl;
 
 uint8_t socknumlist[] = { 2, 3, 4, 5, 6, 7 };
 uint8_t RX_BUF[1024];
@@ -58,10 +64,20 @@ void Callback_IPConflict(void) {
 	ip_assigned = false;
 }
 
+void ETH_ChipReset() {
+	UART_Message("Resetting ... \r\n");
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3, GPIO_PIN_RESET);
+	HAL_Delay(100);
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3, GPIO_PIN_SET);
+	UART_Message("Reset ... \r\n");
+	HAL_Delay(500);
+}
+
 uint8_t dhcp_buffer[1024];
 uint8_t dns_buffer[1024];
 
 uint8_t ETH_Init() {
+//	ETH_ChipReset();
 	// Register W5500 callbacks
 	reg_wizchip_cs_cbfunc(wizchipSelect, wizchipUnselect);
 	reg_wizchip_spi_cbfunc(wizchipReadByte, wizchipWriteByte);
@@ -78,7 +94,7 @@ uint8_t ETH_Init() {
 			Callback_IPConflict);
 
 	sprintf(msgbuf, "Obtaining network configuration from DHCP ... \r\n");
-	HAL_UART_Transmit(&huart6, (uint8_t*)msgbuf, strlen(msgbuf), 100);
+	HAL_UART_Transmit(&huart6, (uint8_t*) msgbuf, strlen(msgbuf), 100);
 	uint32_t ctr = 100;
 	while ((!ip_assigned) && ctr) {
 		DHCP_run();
@@ -90,8 +106,9 @@ uint8_t ETH_Init() {
 		HAL_UART_Transmit(&huart6, (uint8_t*) msgbuf, strlen(msgbuf), 100);
 		return 0;
 	}
-	sprintf(msgbuf, "Network configuration obtained!\r\n-----------------------\r\n");
-	HAL_UART_Transmit(&huart6, (uint8_t*)msgbuf, strlen(msgbuf), 100);
+	sprintf(msgbuf,
+			"Network configuration obtained!\r\n-----------------------\r\n");
+	HAL_UART_Transmit(&huart6, (uint8_t*) msgbuf, strlen(msgbuf), 100);
 
 	getIPfromDHCP(net_info.ip);
 	getGWfromDHCP(net_info.gw);
@@ -154,8 +171,8 @@ uint8_t ETH_Connect(uint8_t *sck, char *server) {
 		return -2;
 	}
 
-	sprintf(msgbuf, "Attempting to connect to %d.%d.%d.%d:%d\r\n", server_ip[0], server_ip[1],
-				server_ip[2], server_ip[3], server_port);
+	sprintf(msgbuf, "Attempting to connect to %d.%d.%d.%d:%d\r\n", server_ip[0],
+			server_ip[1], server_ip[2], server_ip[3], server_port);
 	UART_Send();
 
 	int8_t ret;
@@ -168,19 +185,41 @@ uint8_t ETH_Connect(uint8_t *sck, char *server) {
 	return 0;
 }
 
-int8_t ETH_Listen(uint8_t *sck, char* buf){
+int8_t ETH_Listen(uint8_t *sck, char *buf) {
 	int RSR_Len = 0, repeat = 500;
-	while(!RSR_Len && repeat){
+	while (!RSR_Len && repeat) {
 		RSR_Len = getSn_RX_RSR(*sck);
 	}
-	if(!repeat){
+	if (!repeat) {
 		return 0;
 	} else {
 		setSn_IR(*sck, 0x1f);
-		return recv(*sck, (uint8_t*)buf, RSR_Len);
+		return recv(*sck, (uint8_t*) buf, RSR_Len);
 	}
 }
 
-void ETH_Send(uint8_t* sck, char* msg){
-	send(*sck, (uint8_t*)msg, strlen(msg));
+// stores incoming data into buffer and returns data length
+int32_t ETH_Recieve(uint8_t *sck, char *ethbuf) {
+	int len = getSn_RX_RSR(*sck);
+	setSn_IR(*sck, 0x1f);
+	return recv(*sck, (uint8_t*) ethbuf, len);
 }
+
+void ETH_Send(uint8_t *sck, char *msg) {
+	send(*sck, (uint8_t*) msg, strlen(msg));
+}
+
+void ETH_MessageHandler(uint8_t *sck, char *ethbuf, int32_t len) {
+//	HAL_UART_Transmit(&huart6, (uint8_t*)ethbuf, len, 100);
+	if (strcmp(ethbuf, ETH_EV_PING) == 0) {
+		sprintf(ethbuf, "pong");
+		send(*sck, (uint8_t*) ethbuf, strlen(ethbuf));
+	} else if (strcmp(ethbuf, ETH_EV_AUTH) == 0) {
+		sprintf(ethbuf, "{\"id\":\"%s\",\"auth\":\"%s\",\"name\":\"%s\"}",
+				"STM32-BOARD", "123123", "Vjetroelektrana Zivinice");
+		send(*sck, (uint8_t*) ethbuf, strlen(ethbuf));
+	} else {
+		CTRL_SetParameters(ctrl, ethbuf);
+	}
+}
+
