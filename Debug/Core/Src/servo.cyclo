@@ -1,5 +1,0 @@
-../Core/Src/servo.c:21:6:SERVO_On	1
-../Core/Src/servo.c:25:6:SERVO_Off	1
-../Core/Src/servo.c:29:6:SERVO_Init	1
-../Core/Src/servo.c:34:6:SERVO_SetAngle	3
-../Core/Src/servo.c:43:6:SERVO_StartSweep	4
