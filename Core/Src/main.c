@@ -38,6 +38,10 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define BUFSIZE 255
+#define angle 12
+#define diameterInCM 12
+#define pi 3
+#define TSR 2
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -48,7 +52,10 @@
 SPI_HandleTypeDef hspi1;
 
 TIM_HandleTypeDef htim1;
+TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
+TIM_HandleTypeDef htim5;
 
 UART_HandleTypeDef huart6;
 
@@ -58,12 +65,16 @@ uint8_t rx_buffer[BUFSIZE + 2] = { 0 };
 uint8_t rx_input[1] = { 0 };
 uint8_t rx_index = 0;
 char msgbuf[1024];
+char uart_buff[1024];
 char ethbuf[512];
 UART_HandleTypeDef *UART = &huart6;
 TIM_HandleTypeDef *PWM_Timer = &htim1;
 uint8_t sck;
 uint8_t ledstate;
-
+uint16_t speed=0;
+uint16_t encoder_counter = 0;
+uint16_t wind_angle = 0;
+uint8_t calculate = 0;
 struct Controller* ctrl;
 /* USER CODE END PV */
 
@@ -74,6 +85,9 @@ static void MX_USART6_UART_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM4_Init(void);
+static void MX_TIM2_Init(void);
+static void MX_TIM3_Init(void);
+static void MX_TIM5_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -110,6 +124,28 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	ETH_RCV = ETH_Recieve(&sck, ethbuf);
 }
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim){
+	if(htim==&htim5){
+		calculate=1;
+	}
+}
+
+void windInformation(){
+	speed=CalculateSpeed(htim3.Instance->CNT);
+	htim3.Instance->CNT=0;
+	encoder_counter = __HAL_TIM_GET_COUNTER(&htim2);
+	wind_angle=encoder_counter*angle;
+	sprintf(uart_buff,"Wind speed: %d m/s Wind angle: %d \r\n", speed, wind_angle);
+	HAL_UART_Transmit(&huart6, (uint8_t *)uart_buff, 50,500);
+	calculate=0;
+}
+
+
+int CalculateSpeed(uint32_t counter){
+	return counter*pi*diameterInCM*10/(TSR*100);
+}
+
 
 //void HAL_ADC_LevelOutOfWindowCallback(ADC_HandleTypeDef *hadc) {
 //	/* Set variable to report analog watchdog out of window status to main      */
@@ -153,19 +189,25 @@ int main(void)
   MX_TIM1_Init();
   MX_SPI1_Init();
   MX_TIM4_Init();
+  MX_TIM2_Init();
+  MX_TIM3_Init();
+  MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
 	SERVO_Init();
 //	int8_t rcv = 0;
-	while( !ETH_Init() );
-	if (ETH_SocketInit(&sck)) {
-		ETH_Connect(&sck, "192.168.100.6:8080");
-	}
+//	while( !ETH_Init() );
+//	if (ETH_SocketInit(&sck)) {
+//		ETH_Connect(&sck, "192.168.100.6:8080");
+//	}
 	UART_Message("Starting the program ...\r\n");
 	HAL_UART_Receive_IT(&huart6, rx_input, 1);
 
 	SERVO_On();
 
 	HAL_TIM_Base_Start(&htim4);
+	HAL_TIM_Base_Start_IT(&htim3);
+	HAL_TIM_Base_Start_IT(&htim5);
+	HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
 
   /* USER CODE END 2 */
 
@@ -173,15 +215,24 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 	while (1) {
 
+		SERVO_SetAngle(0);
 		HAL_Delay(2000);
-		if(ETH_RCV){
-			ETH_MessageHandler(&sck, ethbuf, ETH_RCV);
-			ETH_RCV = 0;
-		}
-		if(ctrl->heatmap){
-			char* heatstr = CTRL_HeatmapString(ctrl);
-			HAL_UART_Transmit(&huart6, (uint8_t*)heatstr, strlen(heatstr), 100);
-		}
+		SERVO_SetAngle(45);
+		HAL_Delay(2000);
+		SERVO_SetAngle(90);
+		HAL_Delay(2000);
+//		HAL_Delay(2000);
+//		if(ETH_RCV){
+//			ETH_MessageHandler(&sck, ethbuf, ETH_RCV);
+//			ETH_RCV = 0;
+//		}
+//		if(ctrl->heatmap){
+//			char* heatstr = CTRL_HeatmapString(ctrl);
+//			HAL_UART_Transmit(&huart6, (uint8_t*)heatstr, strlen(heatstr), 100);
+//		}
+//		if(calculate){
+//				  windInformation();
+//			  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -348,6 +399,103 @@ static void MX_TIM1_Init(void)
 }
 
 /**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_Encoder_InitTypeDef sConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 4;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 29;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  sConfig.EncoderMode = TIM_ENCODERMODE_TI12;
+  sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC1Filter = 0;
+  sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC2Filter = 0;
+  if (HAL_TIM_Encoder_Init(&htim2, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 0;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 65535;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_ETRMODE2;
+  sClockSourceConfig.ClockPolarity = TIM_CLOCKPOLARITY_NONINVERTED;
+  sClockSourceConfig.ClockPrescaler = TIM_CLOCKPRESCALER_DIV1;
+  sClockSourceConfig.ClockFilter = 0;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
+
+}
+
+/**
   * @brief TIM4 Initialization Function
   * @param None
   * @retval None
@@ -393,6 +541,52 @@ static void MX_TIM4_Init(void)
   /* USER CODE BEGIN TIM4_Init 2 */
 
   /* USER CODE END TIM4_Init 2 */
+
+}
+
+/**
+  * @brief TIM5 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM5_Init(void)
+{
+
+  /* USER CODE BEGIN TIM5_Init 0 */
+
+  /* USER CODE END TIM5_Init 0 */
+
+  TIM_SlaveConfigTypeDef sSlaveConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM5_Init 1 */
+
+  /* USER CODE END TIM5_Init 1 */
+  htim5.Instance = TIM5;
+  htim5.Init.Prescaler = 42000;
+  htim5.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim5.Init.Period = 2400;
+  htim5.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim5.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim5) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sSlaveConfig.SlaveMode = TIM_SLAVEMODE_DISABLE;
+  sSlaveConfig.InputTrigger = TIM_TS_ITR0;
+  if (HAL_TIM_SlaveConfigSynchro(&htim5, &sSlaveConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim5, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM5_Init 2 */
+
+  /* USER CODE END TIM5_Init 2 */
 
 }
 
