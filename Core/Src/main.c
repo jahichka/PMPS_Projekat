@@ -70,11 +70,12 @@ char ethbuf[512];
 UART_HandleTypeDef *UART = &huart6;
 TIM_HandleTypeDef *PWM_Timer = &htim1;
 uint8_t sck;
-uint8_t ledstate;
 uint16_t speed=0;
 uint16_t encoder_counter = 0;
 uint16_t wind_angle = 0;
 uint8_t calculate = 0;
+uint32_t blade_angle;
+float coeff_angle=1;
 struct Controller* ctrl;
 /* USER CODE END PV */
 
@@ -136,6 +137,8 @@ void windInformation(){
 	htim3.Instance->CNT=0;
 	encoder_counter = __HAL_TIM_GET_COUNTER(&htim2);
 	wind_angle=encoder_counter*angle;
+	if(wind_angle>60||wind_angle<300) coeff_angle = 0;
+	else coeff_angle = angle/wind_angle;
 	sprintf(uart_buff,"Wind speed: %d m/s Wind angle: %d \r\n", speed, wind_angle);
 	HAL_UART_Transmit(&huart6, (uint8_t *)uart_buff, 50,500);
 	calculate=0;
@@ -145,6 +148,8 @@ void windInformation(){
 int CalculateSpeed(uint32_t counter){
 	return counter*pi*diameterInCM*10/(TSR*100);
 }
+
+
 
 
 //void HAL_ADC_LevelOutOfWindowCallback(ADC_HandleTypeDef *hadc) {
@@ -230,9 +235,10 @@ int main(void)
 //			char* heatstr = CTRL_HeatmapString(ctrl);
 //			HAL_UART_Transmit(&huart6, (uint8_t*)heatstr, strlen(heatstr), 100);
 //		}
-//		if(calculate){
-//				  windInformation();
-//			  }
+		if(calculate){
+		windInformation();
+		blade_angle = CTRL_FindAngle(ctrl, speed,10)* turnOn;
+		}
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
