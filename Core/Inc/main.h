@@ -66,6 +66,10 @@ void Error_Handler(void);
 #define ETH_RST_GPIO_Port GPIOA
 #define ETH_CS_Pin GPIO_PIN_4
 #define ETH_CS_GPIO_Port GPIOA
+#define SERVO_PWM_Pin GPIO_PIN_9
+#define SERVO_PWM_GPIO_Port GPIOE
+#define IR_COUNTER_Pin GPIO_PIN_2
+#define IR_COUNTER_GPIO_Port GPIOD
 
 /* USER CODE BEGIN Private defines */
 

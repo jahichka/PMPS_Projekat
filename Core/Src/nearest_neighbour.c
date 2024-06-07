@@ -13,8 +13,7 @@ int abs(int num) {
     return num;
 }
 
-int find_min_distance(uint8_t* arr, int val, int size, int index, int left,
-                      int right) {
+int find_min_distance(uint8_t* arr, int val, int size, int index, int left, int right) {
   int min = abs(arr[index] - val);
   if (right < size - 1)
     ++right;
@@ -30,17 +29,19 @@ int find_min_distance(uint8_t* arr, int val, int size, int index, int left,
 }
 
 int nearest_neighbor(int val, uint8_t* arr, int size) {
-  int index = size / 2;
   int left = 0, right = size - 1;
+  int index = left + ( right - left ) / 2;
 
-  while (arr[index] != val && left != right) {
-    if (arr[index] > val) {
-      right = index - 1;
-      index = left + (index - left) / 2;
-    } else {
-      left = index + 1;
-      index = left + (right - index) / 2;
-    }
+  while (arr[index] != val && left <= right) {
+	  if ( arr[index] < val ){
+		  left = index + 1;
+	  } else {
+		  right = index - 1;
+	  }
+	  index = left + ( right - left ) / 2;
+  }
+  if(index >= size) {
+	  index = size - 1;
   }
   if (arr[index] == val)
     return index;

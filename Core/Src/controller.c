@@ -10,33 +10,43 @@
 #include "stdarg.h"
 #include "stdio.h"
 #include "stdlib.h"
+#include "stm32f4xx_hal.h"
+
+extern UART_HandleTypeDef *UART;
+extern char msgbuf[1024];
 
 struct Controller* CTRL_ControllerInit() {
 	struct Controller *ctrl = malloc(sizeof(struct Controller));
-	ctrl->angle_count = 0;
+	ctrl->load_count = 0;
 	ctrl->wind_count = 0;
 	ctrl->wind_speed = 0;
-	ctrl->blade_angle = 0;
+	ctrl->system_load = 0;
 	ctrl->heatmap = 0;
 	return ctrl;
 }
 
+struct Controller* CTRL_ControllerZeroInit() {
+	struct Controller *ctrl = CTRL_ControllerInit();
+	char temp[10] = "0101010100";
+	CTRL_SetParameters(ctrl, temp);
+	return ctrl;
+}
+
 void CTRL_Cleanup(struct Controller *ctrl) {
-	for (int i = 0; i < ctrl->angle_count; ++i) {
+	for (int i = 0; i < ctrl->load_count; ++i) {
 		free(ctrl->heatmap[i]);
 	}
 	if (ctrl->heatmap)
 		free(ctrl->heatmap);
-	if (ctrl->blade_angle)
-		free(ctrl->blade_angle);
+	if (ctrl->system_load)
+		free(ctrl->system_load);
 	if (ctrl->wind_speed)
 		free(ctrl->wind_speed);
 }
 
-int CTRL_FindAngle(struct Controller *ctrl, int measured_wind, int cur_angle) {
-	int nnw = nearest_neighbor(measured_wind, ctrl->wind_speed,
-			ctrl->wind_count);
-	int nna = nearest_neighbor(cur_angle, ctrl->blade_angle, ctrl->angle_count);
+int CTRL_FindAngle(struct Controller *ctrl, int measured_wind, int sysload) {
+	int nnw = nearest_neighbor(measured_wind, ctrl->wind_speed, ctrl->wind_count);
+	int nna = nearest_neighbor(sysload, ctrl->system_load, ctrl->load_count);
 	return ctrl->heatmap[nna][nnw];
 }
 
@@ -48,7 +58,7 @@ void CTRL_SetParameters(struct Controller *ctrl, char *ethbuf) {
 	ctrl->wind_count = atoi(numbuf);
 
 	memcpy(numbuf, &ethbuf[2], 2);
-	ctrl->angle_count = atoi(numbuf);
+	ctrl->load_count = atoi(numbuf);
 
 	int offset = 4;
 	ctrl->wind_speed = (uint8_t*) malloc(ctrl->wind_count * sizeof(uint8_t));
@@ -58,15 +68,15 @@ void CTRL_SetParameters(struct Controller *ctrl, char *ethbuf) {
 		offset += 2;
 	}
 
-	ctrl->blade_angle = (uint8_t*) malloc(ctrl->angle_count * sizeof(uint8_t));
-	for (int i = 0; i < ctrl->angle_count; ++i) {
+	ctrl->system_load = (uint8_t*) malloc(ctrl->load_count * sizeof(uint8_t));
+	for (int i = 0; i < ctrl->load_count; ++i) {
 		memcpy(numbuf, &ethbuf[offset], 2);
-		ctrl->blade_angle[i] = atoi(numbuf);
+		ctrl->system_load[i] = atoi(numbuf);
 		offset += 2;
 	}
 
-	ctrl->heatmap = malloc(ctrl->angle_count * sizeof(uint8_t*));
-	for (int i = 0; i < ctrl->angle_count; ++i) {
+	ctrl->heatmap = malloc(ctrl->load_count * sizeof(uint8_t*));
+	for (int i = 0; i < ctrl->load_count; ++i) {
 		ctrl->heatmap[i] = malloc(ctrl->wind_count * sizeof(uint8_t));
 		for (int j = 0; j < ctrl->wind_count; ++j) {
 			memcpy(numbuf, &ethbuf[offset], 2);
@@ -74,6 +84,11 @@ void CTRL_SetParameters(struct Controller *ctrl, char *ethbuf) {
 			offset += 2;
 		}
 	}
+
+	sprintf(msgbuf, "%s\r\n", CTRL_HeatmapString(ctrl));
+	UART_Send();
+
+	memset(ethbuf, 0, sizeof(ethbuf));
 }
 
 char* CTRL_HeatmapString(struct Controller *ctrl) {
@@ -104,10 +119,10 @@ char* CTRL_HeatmapString(struct Controller *ctrl) {
 	position += snprintf(buffer + position, buffer_size - position, "\r\n");
 
 	// Print rows for blade angles and heatmap values
-	for (int i = 0; i < ctrl->angle_count; ++i) {
+	for (int i = 0; i < ctrl->load_count; ++i) {
 		// Print blade angle in yellow
 		position += snprintf(buffer + position, buffer_size - position,
-				"\033[0;33m  %u\t|\033[0;0m", ctrl->blade_angle[i]);
+				"\033[0;33m  %u\t|\033[0;0m", ctrl->system_load[i]);
 
 		// Print heatmap values for each wind speed
 		for (int j = 0; j < ctrl->wind_count; ++j) {
