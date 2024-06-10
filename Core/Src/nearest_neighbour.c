@@ -21,7 +21,7 @@ int find_min_distance(uint8_t* arr, int val, int size, int index, int left, int 
     --left;
   if (abs(arr[left] - val) < min) {
     index = left;
-    min = abs(arr[left] - left);
+    min = abs(arr[left] - val);
   }
   if (abs(arr[right] - val) < min)
     index = right;
