@@ -170,7 +170,7 @@ void regulator(){
 	induction = (667*voltage-1667)/1000;
 	resistance = induction/20;
 	if(abs(resistance-sysload)>100){
-		sprintf(uart_buff, "Resistance should be changed by %d Ohm\r\n", abs(sysload-resistance));
+		sprintf(uart_buff, "Resistance should be changed by %d Ohm\r\n", resistance-sysload);
 		HAL_UART_Transmit(&huart6, (uint8_t*) uart_buff, strlen(uart_buff), 500);
 	}
 }
