@@ -42,6 +42,7 @@
 #define diameterInCM 12
 #define pi 3
 #define TSR 2
+#define rotationsPerCycle 3
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -50,6 +51,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
+ADC_HandleTypeDef hadc2;
 
 SPI_HandleTypeDef hspi1;
 
@@ -78,6 +80,8 @@ uint16_t blade_angle = 0;
 uint8_t calculate = 0;
 struct Controller *ctrl;
 int16_t sysload = 0;
+uint8_t turn_on = 1;
+uint8_t blade_angle_regulator;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -90,6 +94,7 @@ static void MX_TIM5_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_ADC1_Init(void);
+static void MX_ADC2_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -138,6 +143,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 void windInformation() {
 	encoder_counter = __HAL_TIM_GET_COUNTER(&htim2);
 	wind_angle = encoder_counter;
+	regulator();
 	HAL_ADC_PollForConversion(&hadc1, 1000);
 	sysload = HAL_ADC_GetValue(&hadc1) >> 1;
 	sprintf(uart_buff, "Wind speed: %d m/s, Load: %d%%, Wind angle: %d \r\n", speed, sysload,
@@ -146,8 +152,17 @@ void windInformation() {
 	calculate = 0;
 }
 
+void regulator(){
+	if(wind_angle>60||wind_angle<300) turn_on = 0;
+	else if(wind_angle>48||wind_angle<312) blade_angle_regulator = 5;
+	else if(wind_angle>36||wind_angle<324) blade_angle_regulator = 4;
+	else if(wind_angle>24||wind_angle<336) blade_angle_regulator = 3;
+	else if(wind_angle>12||wind_angle<348) blade_angle_regulator = 4;
+	else blade_angle_regulator = 1;
+}
+
 int CalculateSpeed(uint32_t counter) {
-	return counter * pi * diameterInCM * 10 / (TSR * 100);
+	return counter * pi * diameterInCM * 10 / (TSR * 100 * rotationsPerCycle);
 }
 
 //void HAL_ADC_LevelOutOfWindowCallback(ADC_HandleTypeDef *hadc) {
@@ -194,6 +209,7 @@ int main(void)
   MX_TIM3_Init();
   MX_TIM2_Init();
   MX_ADC1_Init();
+  MX_ADC2_Init();
   /* USER CODE BEGIN 2 */
 	ETH_Init();
 	SERVO_Init();
@@ -227,7 +243,7 @@ int main(void)
 		if (calculate) {
 			HAL_ADC_Start(&hadc1);
 			windInformation();
-			int temp = CTRL_FindAngle(ctrl, speed, sysload);
+			int temp = (CTRL_FindAngle(ctrl, speed, sysload) / blade_angle_regulator) * turn_on;
 			if (temp != blade_angle){
 				sprintf(msgbuf, "Setting blade angle to %d ...\r\n", temp);
 				UART_Send();
@@ -336,6 +352,58 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 2 */
 
   /* USER CODE END ADC1_Init 2 */
+
+}
+
+/**
+  * @brief ADC2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC2_Init(void)
+{
+
+  /* USER CODE BEGIN ADC2_Init 0 */
+
+  /* USER CODE END ADC2_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC2_Init 1 */
+
+  /* USER CODE END ADC2_Init 1 */
+
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  */
+  hadc2.Instance = ADC2;
+  hadc2.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+  hadc2.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc2.Init.ScanConvMode = DISABLE;
+  hadc2.Init.ContinuousConvMode = DISABLE;
+  hadc2.Init.DiscontinuousConvMode = DISABLE;
+  hadc2.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc2.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc2.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc2.Init.NbrOfConversion = 1;
+  hadc2.Init.DMAContinuousRequests = DISABLE;
+  hadc2.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  if (HAL_ADC_Init(&hadc2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_10;
+  sConfig.Rank = 1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC2_Init 2 */
+
+  /* USER CODE END ADC2_Init 2 */
 
 }
 
@@ -641,8 +709,8 @@ static void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOH_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
