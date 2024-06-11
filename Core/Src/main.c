@@ -84,8 +84,7 @@ uint8_t turn_on = 1;
 uint8_t blade_angle_regulator;
 uint16_t voltage;
 int16_t induction=0;
-int16_t new_induction;
-int16_t delta_resistance;
+int16_t resistance;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -168,13 +167,12 @@ void regulator(){
 	HAL_ADC_Start(&hadc2);
 	while(HAL_ADC_PollForConversion(&hadc1, 500) != HAL_OK);
 	voltage = (HAL_ADC_GetValue(&hadc2)*3000)/4095;
-	new_induction = (667*voltage-1667)/1000;
-	resistance = new_induction/20;
+	induction = (667*voltage-1667)/1000;
+	resistance = induction/20;
 	if(abs(resistance-sysload)>100){
 		sprintf(uart_buff, "Resistance should be changed by %d Ohm\r\n", abs(sysload-resistance));
 		HAL_UART_Transmit(&huart6, (uint8_t*) uart_buff, strlen(uart_buff), 500);
 	}
-	induction=new_induction;
 }
 
 int CalculateSpeed(uint32_t counter) {
