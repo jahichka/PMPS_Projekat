@@ -169,9 +169,9 @@ void regulator(){
 	while(HAL_ADC_PollForConversion(&hadc1, 500) != HAL_OK);
 	voltage = (HAL_ADC_GetValue(&hadc2)*3000)/4095;
 	new_induction = (667*voltage-1667)/1000;
-	delta_resistance = (induction-new_induction)/20;
-	if(abs(induction-new_induction)>100){
-		sprintf(uart_buff, "Resistance should be changed by %d Ohm\r\n", delta_resistance);
+	resistance = new_induction/20;
+	if(abs(resistance-sysload)>100){
+		sprintf(uart_buff, "Resistance should be changed by %d Ohm\r\n", abs(sysload-resistance));
 		HAL_UART_Transmit(&huart6, (uint8_t*) uart_buff, strlen(uart_buff), 500);
 	}
 	induction=new_induction;
